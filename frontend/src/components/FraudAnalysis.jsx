@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Shield, AlertTriangle, CheckCircle, XCircle, Loader } from 'lucide-react'
 import client from '../api/client'
 
@@ -66,8 +66,23 @@ function FraudAnalysis() {
     return (
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-8">
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-800">{error}</p>
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
+            <p className="text-red-800 font-semibold mb-2">Error</p>
+            <p className="text-red-700">{error}</p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Retry Analysis
+            </button>
+            <button
+              onClick={() => navigate(-1)}
+              className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Go Back
+            </button>
           </div>
         </div>
       </div>
@@ -98,6 +113,29 @@ function FraudAnalysis() {
                   <p className="text-sm opacity-75">Fraud Score</p>
                 </div>
               </div>
+              
+              {/* Legit Percentage */}
+              {analysis.legit_percentage !== undefined && (
+                <div className="mb-4 p-4 bg-white bg-opacity-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium">Legitimacy Score</p>
+                    <p className="text-2xl font-bold">{analysis.legit_percentage.toFixed(1)}%</p>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-4">
+                    <div 
+                      className={`h-4 rounded-full transition-all ${
+                        analysis.legit_percentage >= 70 ? 'bg-green-600' :
+                        analysis.legit_percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'
+                      }`}
+                      style={{ width: `${analysis.legit_percentage}%` }}
+                    />
+                  </div>
+                  <p className="text-xs mt-2 opacity-75">
+                    Based on document analysis using ML model
+                  </p>
+                </div>
+              )}
+              
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className={`h-3 rounded-full ${

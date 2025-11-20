@@ -25,10 +25,17 @@ function ClaimForm() {
     if (!formData.incident_date) {
       newErrors.incident_date = 'Incident date is required'
     } else {
-      const incidentDate = new Date(formData.incident_date)
-      const today = new Date()
-      if (incidentDate > today) {
-        newErrors.incident_date = 'Incident date cannot be in the future'
+      // Validate date format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+      if (!dateRegex.test(formData.incident_date)) {
+        newErrors.incident_date = 'Please select a valid date'
+      } else {
+        const incidentDate = new Date(formData.incident_date + 'T00:00:00')
+        const today = new Date()
+        today.setHours(23, 59, 59, 999) // End of today
+        if (incidentDate > today) {
+          newErrors.incident_date = 'Incident date cannot be in the future'
+        }
       }
     }
     
@@ -52,10 +59,18 @@ function ClaimForm() {
     setErrors({})
 
     try {
+      // Convert date to ISO datetime format for backend
+      // HTML date input gives YYYY-MM-DD, backend expects YYYY-MM-DDTHH:MM:SS
+      let incidentDateISO = null
+      if (formData.incident_date) {
+        // Add time component (00:00:00) to make it a valid datetime string
+        incidentDateISO = `${formData.incident_date}T00:00:00`
+      }
+
       const response = await client.post('/api/claims', {
         policy_number: policyNumber,
         claim_type: formData.claim_type,
-        incident_date: formData.incident_date,
+        incident_date: incidentDateISO,
         description: formData.description
       })
 

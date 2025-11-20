@@ -10,15 +10,52 @@ function AIQuestioning() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [questionCount, setQuestionCount] = useState(0) // Tracks completed Q&A pairs
+  const [autoAnalyzing, setAutoAnalyzing] = useState(false)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
-    // Initial AI greeting
-    setMessages([{
-      type: 'ai',
-      content: 'Hello! I\'m here to help process your claim. I\'ll ask you some questions about the incident to ensure we have all the necessary information. Please provide as much detail as possible.'
-    }])
-  }, [])
+    // Initial AI greeting with contextual first question
+    loadInitialQuestion()
+  }, [claimId])
+
+  const loadInitialQuestion = async () => {
+    try {
+      // Get claim details to ask contextual first question
+      const claimResponse = await client.get(`/api/claims/${claimId}`)
+      const claim = claimResponse.data
+      
+      // Generate contextual first question based on claim type
+      const firstQuestion = getContextualFirstQuestion(claim)
+      
+      setMessages([{
+        type: 'ai',
+        content: `Hello! I'm here to help process your ${claim.claim_type} claim. ${firstQuestion}`
+      }])
+    } catch (err) {
+      // Fallback if claim details can't be loaded
+      setMessages([{
+        type: 'ai',
+        content: 'Hello! I\'m here to help process your claim. I\'ll ask you some questions about the incident to ensure we have all the necessary information. Please provide as much detail as possible.'
+      }])
+    }
+  }
+
+  const getContextualFirstQuestion = (claim) => {
+    const claimType = claim.claim_type.toLowerCase()
+    
+    if (claimType.includes('hospitalization') || claimType.includes('surgery')) {
+      return 'Can you please tell me when you were admitted to the hospital and what was the primary reason for your admission?'
+    } else if (claimType.includes('emergency')) {
+      return 'Can you describe what happened during the emergency incident? When did it occur?'
+    } else if (claimType.includes('prescription')) {
+      return 'Can you tell me about the medication you were prescribed? What condition was it treating?'
+    } else if (claimType.includes('medical treatment')) {
+      return 'Can you describe the medical treatment you received? When did you start this treatment?'
+    } else {
+      return 'Can you please provide more details about the incident? When did it occur and what happened?'
+    }
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -26,7 +63,7 @@ function AIQuestioning() {
 
   const handleSend = async (e) => {
     e.preventDefault()
-    if (!input.trim() || loading) return
+    if (!input.trim() || loading || autoAnalyzing) return
 
     const userMessage = input.trim()
     setInput('')
@@ -40,12 +77,40 @@ function AIQuestioning() {
         { user_message: userMessage }
       )
 
+      const newQuestionCount = questionCount + 1
+      setQuestionCount(newQuestionCount)
+
       setMessages(prev => [...prev, {
         type: 'ai',
         content: response.data.ai_message,
         followUpQuestions: response.data.follow_up_questions,
         fraudIndicators: response.data.fraud_indicators
       }])
+
+      // After 3-4 questions answered, automatically proceed to fraud analysis
+      if (newQuestionCount >= 3) {
+        setAutoAnalyzing(true)
+        setLoading(true)
+        setMessages(prev => [...prev, {
+          type: 'ai',
+          content: 'Thank you for providing all that information. I have enough details now. Let me analyze your claim for fraud risk...'
+        }])
+        
+        // Trigger fraud analysis
+        try {
+          await client.post(`/api/claims/${claimId}/analyze-fraud`)
+          // Navigate to analysis page after a brief delay
+          setTimeout(() => {
+            navigate(`/claim/${claimId}/analysis`)
+          }, 2000)
+        } catch (err) {
+          console.error('Error analyzing fraud:', err)
+          // Still navigate even if analysis fails
+          setTimeout(() => {
+            navigate(`/claim/${claimId}/analysis`)
+          }, 1000)
+        }
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to send message. Please try again.')
     } finally {
@@ -54,13 +119,23 @@ function AIQuestioning() {
   }
 
   const handleContinue = async () => {
+    setLoading(true)
+    setError(null)
+    
     // Trigger fraud analysis before navigating
     try {
       await client.post(`/api/claims/${claimId}/analyze-fraud`)
+      // Navigate to analysis page
+      navigate(`/claim/${claimId}/analysis`)
     } catch (err) {
       console.error('Error analyzing fraud:', err)
+      setError(err.response?.data?.detail || 'Failed to analyze fraud. Please try again.')
+      setLoading(false)
+      // Still navigate even if analysis fails - let the analysis page handle it
+      setTimeout(() => {
+        navigate(`/claim/${claimId}/analysis`)
+      }, 2000)
     }
-    navigate(`/claim/${claimId}/analysis`)
   }
 
   return (
@@ -73,9 +148,22 @@ function AIQuestioning() {
           </h2>
         </div>
 
-        <p className="text-gray-600 mb-6">
-          Our AI will ask you questions about your claim to help identify any potential issues and ensure accuracy.
-        </p>
+        <div className="mb-6">
+          <p className="text-gray-600 mb-2">
+            Our AI will ask you 3-4 contextual questions about your claim to gather necessary information.
+          </p>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex-1 bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${Math.min((questionCount / 4) * 100, 100)}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium">
+              {questionCount}/3-4 questions answered
+            </span>
+          </div>
+        </div>
 
         <div className="bg-gray-50 rounded-lg p-6 mb-6 h-96 overflow-y-auto">
           <div className="space-y-4">
@@ -142,13 +230,21 @@ function AIQuestioning() {
           </div>
         )}
 
-        <button
-          onClick={handleContinue}
-          className="w-full bg-primary-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
-        >
-          Complete Review & Analyze Fraud Risk
-          <ArrowRight size={20} />
-        </button>
+        {questionCount < 3 && !autoAnalyzing && (
+          <button
+            onClick={handleContinue}
+            className="w-full bg-gray-200 text-gray-800 py-3 px-6 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+          >
+            Skip Remaining Questions & Analyze Now
+            <ArrowRight size={20} />
+          </button>
+        )}
+        {autoAnalyzing && (
+          <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
+            <p className="text-blue-800 text-sm">Analyzing fraud risk...</p>
+          </div>
+        )}
       </div>
     </div>
   )

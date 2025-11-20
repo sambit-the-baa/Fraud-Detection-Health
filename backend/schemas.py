@@ -26,6 +26,11 @@ class ClaimCreate(BaseModel):
     incident_date: datetime
     description: Optional[str] = Field(None, max_length=5000)
     
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
+    
     @validator('policy_number')
     def validate_policy_number(cls, v):
         if not re.match(r'^[A-Za-z0-9_-]+$', v):
@@ -94,6 +99,7 @@ class QuestionResponse(BaseModel):
 
 class FraudAnalysisResponse(BaseModel):
     fraud_score: float
+    legit_percentage: Optional[float] = None  # New field for legit percentage
     risk_level: str
     indicators: List[str]
     recommendations: List[str]
