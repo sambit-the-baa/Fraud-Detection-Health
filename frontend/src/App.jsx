@@ -9,6 +9,39 @@ import FraudAnalysis from './components/FraudAnalysis'
 import ClaimSuccess from './components/ClaimSuccess'
 import logo from './assets/images/logo.png'
 import './App.css'
+import React, { useState } from 'react';
+import client from './api/client';
+
+function App() {
+  const [policyNumber, setPolicyNumber] = useState('');
+  const [result, setResult] = useState('');
+
+  async function verifyPolicy(policyNumber) {
+    try {
+      const response = await client.post('/api/verify-policy', { policyNumber });
+      setResult(JSON.stringify(response.data));
+    } catch (err) {
+      setResult('Verification failed! Try again.');
+    }
+  }
+
+  return (
+    <div>
+      <h2>Policy Verification</h2>
+      <input
+        value={policyNumber}
+        onChange={e => setPolicyNumber(e.target.value)}
+        placeholder="Enter Policy Number"
+      />
+      <button onClick={() => verifyPolicy(policyNumber)}>
+        Verify Policy
+      </button>
+      <p>Result: {result}</p>
+    </div>
+  );
+}
+
+export default App;
 
 function App() {
   return (
