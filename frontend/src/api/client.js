@@ -1,5 +1,5 @@
 import axios from 'axios'
-fetch("/api/some-endpoint", {
+fetch("/api", {
   method: "POST",
   body: JSON.stringify(data),
   headers: { "Content-Type": "application/json" }
