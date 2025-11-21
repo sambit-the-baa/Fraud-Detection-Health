@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import client from '../api/client';
+import App from './App.jsx';   // must exist in src/
+import './index.css';          // must exist in src/
 
 function App() {
   const [policyNumber, setPolicyNumber] = useState('');
