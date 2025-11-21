@@ -9,6 +9,13 @@ from typing import List, Optional
 import os
 import logging
 from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+app = FastAPI()
+
+app.mount("/", StaticFiles(directory="../frontend/dist", html=True), name="static")
+
+
 
 # Rate limiting (optional - comment out if slowapi not installed)
 try:
