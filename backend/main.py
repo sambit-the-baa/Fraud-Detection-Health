@@ -69,25 +69,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Serve static files from frontend build
-FRONTEND_BUILD_PATH = Path(__file__).parent.parent / "frontend" / "dist"
-
-if FRONTEND_BUILD_PATH.exists():
-    # Mount static files (JS, CSS, images)
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_BUILD_PATH / "assets")), name="assets")
-    
-    # Serve index.html for all non-API routes (SPA routing)
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        # If path starts with /api, let FastAPI handle it
-        if full_path.startswith("api/"):
-            return {"error": "Not found"}
-        
-        # Serve index.html for all other routes
-        index_file = FRONTEND_BUILD_PATH / "index.html"
-        if index_file.exists():
-            return FileResponse(index_file)
-        return {"error": "Frontend not found"}
 
 # Global exception handler for validation errors
 @app.exception_handler(RequestValidationError)
@@ -369,6 +350,27 @@ async def get_all_claims(
         ) for claim in claims],
         total=len(claims)
     )
+
+# Serve static files from frontend build
+FRONTEND_BUILD_PATH = Path(__file__).parent.parent / "frontend" / "dist"
+
+if FRONTEND_BUILD_PATH.exists():
+    # Mount static files (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_BUILD_PATH / "assets")), name="assets")
+    
+    # Serve index.html for all non-API routes (SPA routing)
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # If path starts with /api, let FastAPI handle it
+        if full_path.startswith("api/"):
+            return {"error": "Not found"}
+        
+        # Serve index.html for all other routes
+        index_file = FRONTEND_BUILD_PATH / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        return {"error": "Frontend not found"}
+
 
 if __name__ == "__main__":
     import uvicorn
