@@ -1,27 +1,21 @@
 import axios from 'axios';
 
-// Set base URL from .env for production OR fallback to localhost for dev
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = 'https://fraud-detection-health.onrender.com';
 
-// Create Axios client with config
 const client = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000, // 30 seconds
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
 });
 
-// Request interceptor (optional: add auth headers here)
 client.interceptors.request.use(
-  (config) => config,
-  (error) => Promise.reject(error)
+  config => config,
+  error => Promise.reject(error)
 );
 
-// Response interceptor with robust error logging
 client.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  response => response,
+  error => {
     if (error.response) {
       const message =
         error.response.data?.message ||
