@@ -1,4 +1,10 @@
 import axios from 'axios'
+fetch("/api/some-endpoint", {
+  method: "POST",
+  body: JSON.stringify(data),
+  headers: { "Content-Type": "application/json" }
+});
+
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const client = axios.create({
