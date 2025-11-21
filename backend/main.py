@@ -59,7 +59,7 @@ else:
     limiter = DummyLimiter()
 
 # CORS middleware
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,https://fraud-detection-health-frontend.onrender.com").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
