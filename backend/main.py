@@ -10,6 +10,20 @@ from dotenv import load_dotenv
 # Import your other modules as needed (schemas, services, models)
 from database import SessionLocal, engine, Base
 # ... (other imports)
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# Then your route:
+@app.post("/api/verify-policy")
+async def verify_policy(policy_data: dict, db: Session = Depends(get_db)):
+    # ...your logic...
+    return {"result": "verified"}
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
