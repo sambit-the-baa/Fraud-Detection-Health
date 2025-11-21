@@ -12,10 +12,7 @@ function PolicyEntry() {
 
   const handleVerify = async (e) => {
     e.preventDefault()
-    if (!policyNumber.trim()) {
-      setError('Please enter a valid policy number.')
-      return
-    }
+    console.log('Form submitted, policyNumber:', policyNumber)
     setLoading(true)
     setError(null)
     setPolicyData(null)
@@ -24,12 +21,14 @@ function PolicyEntry() {
       const response = await client.post('/api/verify-policy', {
         policy_number: policyNumber.trim()
       })
+      console.log('API response:', response.data)
       if (response.data?.valid) {
         setPolicyData(response.data)
       } else {
         setError('Policy not found or invalid. Please check your policy number.')
       }
     } catch (err) {
+      console.error('API error:', err)
       setError(
         err.response?.data?.detail || 
         'Policy not found or server error. Please check your policy number.'
