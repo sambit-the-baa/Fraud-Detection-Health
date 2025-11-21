@@ -132,6 +132,17 @@ ai_service = AIService()
 async def root():
     return {"message": "Health Insurance Claim Portal API"}
 
+@app.post("/api/seed-database")
+async def seed_database(db: Session = Depends(get_db)):
+    """Seed the database with sample policies for testing"""
+    from seed_data import seed_policies
+    try:
+        seed_policies()
+        return {"message": "Database seeded successfully with sample policies", "status": "success"}
+    except Exception as e:
+        logger.error(f"Error seeding database: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to seed database: {str(e)}")
+
 @app.post("/api/verify-policy", response_model=PolicyVerificationResponse)
 async def verify_policy(
     request: Request,
