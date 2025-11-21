@@ -12,6 +12,10 @@ function PolicyEntry() {
 
   const handleVerify = async (e) => {
     e.preventDefault()
+    if (!policyNumber.trim()) {
+      setError('Please enter a valid policy number.')
+      return
+    }
     setLoading(true)
     setError(null)
     setPolicyData(null)
@@ -20,25 +24,29 @@ function PolicyEntry() {
       const response = await client.post('/api/verify-policy', {
         policy_number: policyNumber.trim()
       })
-
-      if (response.data.valid) {
+      if (response.data?.valid) {
         setPolicyData(response.data)
+      } else {
+        setError('Policy not found or invalid. Please check your policy number.')
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Policy not found. Please check your policy number.')
+      setError(
+        err.response?.data?.detail || 
+        'Policy not found or server error. Please check your policy number.'
+      )
     } finally {
       setLoading(false)
     }
   }
 
   const handleContinue = () => {
-    if (policyData) {
+    if (policyData && policyData.policy_number) {
       navigate(`/claim/${policyData.policy_number}`)
     }
   }
 
   const handleViewDashboard = () => {
-    if (policyData) {
+    if (policyData && policyData.policy_number) {
       navigate(`/dashboard?policy=${policyData.policy_number}`)
     }
   }
@@ -49,7 +57,6 @@ function PolicyEntry() {
         <h2 className="text-2xl font-semibold text-gray-800 mb-6">
           Enter Your Policy Number
         </h2>
-
         <form onSubmit={handleVerify} className="space-y-6">
           <div>
             <label htmlFor="policy" className="block text-sm font-medium text-gray-700 mb-2">
@@ -64,14 +71,14 @@ function PolicyEntry() {
                 placeholder="e.g., POL-2024-001"
                 className="w-full px-4 py-3 pl-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 required
+                disabled={loading}
               />
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             </div>
           </div>
-
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !policyNumber.trim()}
             className="w-full bg-primary-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Verifying...' : 'Verify Policy'}
@@ -122,4 +129,3 @@ function PolicyEntry() {
 }
 
 export default PolicyEntry
-
