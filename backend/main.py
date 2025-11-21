@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -67,6 +69,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Serve static files from frontend build
+FRONTEND_BUILD_PATH = Path(__file__).parent.parent / "frontend" / "dist"
+
+if FRONTEND_BUILD_PATH.exists():
+    # Mount static files (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_BUILD_PATH / "assets")), name="assets")
+    
+    # Serve index.html for all non-API routes (SPA routing)
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # If path starts with /api, let FastAPI handle it
+        if full_path.startswith("api/"):
+            return {"error": "Not found"}
+        
+        # Serve index.html for all other routes
+        index_file = FRONTEND_BUILD_PATH / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        return {"error": "Frontend not found"}
 
 # Global exception handler for validation errors
 @app.exception_handler(RequestValidationError)
