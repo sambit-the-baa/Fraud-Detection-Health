@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 app = FastAPI()
 
 app.mount("/", StaticFiles(directory="../frontend/dist", html=True), name="static")
-@app.post("/api/some-endpoint")
+@app.post("/api")
 def handle_data(data: dict):
     # process data
     return {"result": "success"}
