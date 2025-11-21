@@ -1,47 +1,14 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import PolicyEntry from './components/PolicyEntry'
-import Dashboard from './components/Dashboard'
-import ClaimForm from './components/ClaimForm'
-import ClaimDetails from './components/ClaimDetails'
-import DocumentUpload from './components/DocumentUpload'
-import AIQuestioning from './components/AIQuestioning'
-import FraudAnalysis from './components/FraudAnalysis'
-import ClaimSuccess from './components/ClaimSuccess'
-import logo from './assets/images/logo.png'
-import './App.css'
-import React, { useState } from 'react';
-import client from './api/client';
-
-function App() {
-  const [policyNumber, setPolicyNumber] = useState('');
-  const [result, setResult] = useState('');
-
-  async function verifyPolicy(policyNumber) {
-    try {
-      const response = await client.post('/api/verify-policy', { policyNumber });
-      setResult(JSON.stringify(response.data));
-    } catch (err) {
-      setResult('Verification failed! Try again.');
-    }
-  }
-
-  return (
-    <div>
-      <h2>Policy Verification</h2>
-      <input
-        value={policyNumber}
-        onChange={e => setPolicyNumber(e.target.value)}
-        placeholder="Enter Policy Number"
-      />
-      <button onClick={() => verifyPolicy(policyNumber)}>
-        Verify Policy
-      </button>
-      <p>Result: {result}</p>
-    </div>
-  );
-}
-
-export default App;
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import PolicyEntry from './components/PolicyEntry';
+import Dashboard from './components/Dashboard';
+import ClaimForm from './components/ClaimForm';
+import ClaimDetails from './components/ClaimDetails';
+import DocumentUpload from './components/DocumentUpload';
+import AIQuestioning from './components/AIQuestioning';
+import FraudAnalysis from './components/FraudAnalysis';
+import ClaimSuccess from './components/ClaimSuccess';
+import logo from './assets/images/logo.png';
+import './App.css';
 
 function App() {
   return (
@@ -77,8 +44,7 @@ function App() {
         </div>
       </div>
     </Router>
-  )
+  );
 }
 
-export default App
-
+export default App;
