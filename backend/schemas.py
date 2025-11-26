@@ -56,7 +56,7 @@ class ClaimCreate(BaseModel):
         return v
 
 class ClaimResponse(BaseModel):
-    id: int
+    id: str
     policy_number: str
     claim_type: str
     incident_date: str
@@ -66,7 +66,7 @@ class ClaimResponse(BaseModel):
     fraud_risk_level: Optional[str] = None
 
 class ClaimDetailResponse(BaseModel):
-    id: int
+    id: str
     policy_number: str
     claim_type: str
     incident_date: str
@@ -84,7 +84,7 @@ class ClaimsListResponse(BaseModel):
     total: int
 
 class DocumentUploadResponse(BaseModel):
-    id: int
+    id: str
     filename: str
     document_type: str
     uploaded_at: str
