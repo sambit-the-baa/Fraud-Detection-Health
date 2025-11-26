@@ -120,29 +120,39 @@ async def create_claim(claim: schemas.ClaimCreate, db = Depends(get_db)):
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
     
-    # Create new claim
-    db_claim = models.Claim(
-        policy_number=claim.policy_number,
-        claim_type=claim.claim_type,
-        incident_date=claim.incident_date,
-        description=claim.description,
-        status="pending"
-    )
-    db.add(db_claim)
-    db.commit()
-    db.refresh(db_claim)
+    # Create new claim document for MongoDB
+    from datetime import datetime
+    from bson import ObjectId
+    
+    claim_doc = {
+        "policy_number": claim.policy_number,
+        "claim_type": claim.claim_type,
+        "incident_date": claim.incident_date,
+        "description": claim.description,
+        "status": "pending",
+        "fraud_score": None,
+        "fraud_risk_level": None,
+        "created_at": datetime.now(),
+        "updated_at": datetime.now(),
+        "documents": [],
+        "questions_count": 0
+    }
+    
+    # Insert into MongoDB
+    result = db.claims.insert_one(claim_doc)
+    claim_doc["_id"] = result.inserted_id
     
     return schemas.ClaimResponse(
-        id=str(db_claim.id),
-        policy_number=db_claim.policy_number,
-        claim_type=db_claim.claim_type,
-        incident_date=db_claim.incident_date.isoformat(),
-        description=db_claim.description,
-        status=db_claim.status,
-        fraud_score=db_claim.fraud_score,
-        fraud_risk_level=db_claim.fraud_risk_level,
-        created_at=db_claim.created_at.isoformat(),
-        updated_at=db_claim.updated_at.isoformat(),
+        id=str(claim_doc["_id"]),
+        policy_number=claim_doc["policy_number"],
+        claim_type=claim_doc["claim_type"],
+        incident_date=claim_doc["incident_date"].isoformat() if claim_doc["incident_date"] else None,
+        description=claim_doc["description"],
+        status=claim_doc["status"],
+        fraud_score=claim_doc["fraud_score"],
+        fraud_risk_level=claim_doc["fraud_risk_level"],
+        created_at=claim_doc["created_at"].isoformat() if claim_doc["created_at"] else None,
+        updated_at=claim_doc["updated_at"].isoformat() if claim_doc["updated_at"] else None,
         documents=[],
         questions_count=0
     )
