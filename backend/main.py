@@ -89,7 +89,7 @@ app.add_middleware(
 # ==================== POLICY ROUTES ====================
 
 @app.post("/api/verify-policy", response_model=schemas.PolicyVerificationResponse)
-async def verify_policy(request: schemas.PolicyVerificationRequest, db: Session = Depends(get_db)):
+async def verify_policy(request: schemas.PolicyVerificationRequest, db = Depends(get_db)):
     """Verify if a policy exists and is valid"""
     policy = policy_service.verify_policy(db, request.policy_number)
     
@@ -113,7 +113,7 @@ async def verify_policy(request: schemas.PolicyVerificationRequest, db: Session 
 # ==================== CLAIMS ROUTES ====================
 
 @app.post("/api/claims", response_model=schemas.ClaimResponse)
-async def create_claim(claim: schemas.ClaimCreate, db: Session = Depends(get_db)):
+async def create_claim(claim: schemas.ClaimCreate, db = Depends(get_db)):
     """Create a new insurance claim"""
     # Verify policy exists
     policy = policy_service.verify_policy(db, claim.policy_number)
@@ -148,7 +148,7 @@ async def create_claim(claim: schemas.ClaimCreate, db: Session = Depends(get_db)
     )
 
 @app.get("/api/claims/{claim_id}", response_model=schemas.ClaimResponse)
-async def get_claim(claim_id: int, db: Session = Depends(get_db)):
+async def get_claim(claim_id: int, db = Depends(get_db)):
     """Get claim details by ID"""
     claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
     if not claim:
@@ -175,7 +175,7 @@ async def get_claim(claim_id: int, db: Session = Depends(get_db)):
 async def get_all_claims(
     policy_number: Optional[str] = None,
     status: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
     """Get all claims with optional filters"""
     query = db.query(models.Claim)
@@ -208,7 +208,7 @@ async def get_all_claims(
     return schemas.ClaimsListResponse(claims=claims_response, total=len(claims_response))
 
 @app.get("/api/policies/{policy_number}/claims", response_model=schemas.ClaimsListResponse)
-async def get_policy_claims(policy_number: str, db: Session = Depends(get_db)):
+async def get_policy_claims(policy_number: str, db = Depends(get_db)):
     """Get all claims for a specific policy"""
     claims = db.query(models.Claim).filter(models.Claim.policy_number == policy_number).all()
     
@@ -239,7 +239,7 @@ async def upload_document(
     claim_id: int,
     file: UploadFile = File(...),
     document_type: str = "other",
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
     """Upload a document for a claim"""
     claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
@@ -262,7 +262,7 @@ async def upload_document(
 async def ask_question(
     claim_id: int,
     request: schemas.QuestionRequest,
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
     """AI asks questions about the claim"""
     claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
@@ -281,7 +281,7 @@ async def ask_question(
 # ==================== FRAUD ANALYSIS ROUTES ====================
 
 @app.post("/api/claims/{claim_id}/analyze-fraud", response_model=schemas.FraudAnalysisResponse)
-async def analyze_fraud(claim_id: int, db: Session = Depends(get_db)):
+async def analyze_fraud(claim_id: int, db = Depends(get_db)):
     """Perform fraud analysis on a claim"""
     claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
     if not claim:
@@ -310,7 +310,7 @@ async def analyze_fraud(claim_id: int, db: Session = Depends(get_db)):
 async def update_claim_status(
     claim_id: int,
     status_update: schemas.ClaimStatusUpdate,
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
     """Update claim status (admin)"""
     claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
