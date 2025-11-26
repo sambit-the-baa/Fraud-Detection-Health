@@ -51,9 +51,9 @@ def seed_sample_policies():
             ]
             db.policies.insert_many(sample_policies)
             db.policies.create_index("policy_number", unique=True)
-            logger.info("Sample policies seeded successfully")
+            print("Sample policies seeded successfully")
     except Exception as e:
-        logger.error(f"Error seeding policies: {e}")
+        print(f"Error seeding policies: {e}")
 
 # Call seed function on startup
 seed_sample_policies()
@@ -64,12 +64,8 @@ ai_service = AIService()
 document_service = DocumentService()
 
 def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+        # MongoDB migration - using get_sync_db() from database module
+    return get_sync_db()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 load_dotenv()
