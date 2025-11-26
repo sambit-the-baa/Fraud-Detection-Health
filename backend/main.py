@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 import os
 import logging
-from dotenv import import load_dotenv
+from dotenv import load_dotenv
 from typing import List, Optional
 
 # Import your other modules
