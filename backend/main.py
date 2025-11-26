@@ -2,22 +2,19 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from sqlalchemy.orm import Session
+# MongoDB migration - removed SQLAlchemy import
 import os
 import logging
 from dotenv import load_dotenv
 from typing import List, Optional
 
 # Import your other modules
-from database import SessionLocal, engine, Base, get_sync_db
+from database import get_sync_db
 import models
 import schemas
 from services.policy_service import PolicyService
 from services.ai_service import AIService
 from services.document_service import DocumentService
-
-# Create all database tables
-Base.metadata.create_all(bind=engine)
 
 # Seed sample policies in MongoDB
 def seed_sample_policies():
