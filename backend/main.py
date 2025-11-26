@@ -104,10 +104,10 @@ async def verify_policy(request: schemas.PolicyVerificationRequest, db = Depends
     
     return schemas.PolicyVerificationResponse(
         valid=True,
-        policy_number=policy.policy_number,
-        policy_holder_name=policy.policy_holder_name,
-        policy_type=policy.policy_type,
-        expiry_date=policy.expiry_date.isoformat() if policy.expiry_date else None
+        policy_number=policy["policy_number"],
+        policy_holder_name=policy["policy_holder_name"],
+        policy_type=policy["policy_type"],
+        expiry_date=policy["expiry_date"].isoformat() if policy["expiry_date"] else None
     )
 
 # ==================== CLAIMS ROUTES ====================
