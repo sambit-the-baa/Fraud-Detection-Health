@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from typing import List, Optional
 
 # Import your other modules
-from database import SessionLocal, engine, Base
+from database import SessionLocal, engine, Base, get_sync_db
 import models
 import schemas
 from services.policy_service import PolicyService
@@ -18,6 +18,48 @@ from services.document_service import DocumentService
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
+
+# Seed sample policies in MongoDB
+def seed_sample_policies():
+    """Insert sample policies if collection is empty"""
+    try:
+        db = get_sync_db()
+        if db.policies.count_documents({}) == 0:
+            from datetime import datetime, timedelta
+            sample_policies = [
+                {
+                    "policy_number": "POL-2024-001",
+                    "policy_holder_name": "John Smith",
+                    "policy_type": "Premium Health",
+                    "expiry_date": datetime.now() + timedelta(days=365),
+                    "created_at": datetime.now(),
+                    "status": "active"
+                },
+                {
+                    "policy_number": "POL-2024-002",
+                    "policy_holder_name": "Jane Doe",
+                    "policy_type": "Basic Health",
+                    "expiry_date": datetime.now() + timedelta(days=180),
+                    "created_at": datetime.now(),
+                    "status": "active"
+                },
+                {
+                    "policy_number": "POL-2024-003",
+                    "policy_holder_name": "Bob Johnson",
+                    "policy_type": "Family Health",
+                    "expiry_date": datetime.now() + timedelta(days=730),
+                    "created_at": datetime.now(),
+                    "status": "active"
+                },
+            ]
+            db.policies.insert_many(sample_policies)
+            db.policies.create_index("policy_number", unique=True)
+            logger.info("Sample policies seeded successfully")
+    except Exception as e:
+        logger.error(f"Error seeding policies: {e}")
+
+# Call seed function on startup
+seed_sample_policies()
 
 # Initialize services
 policy_service = PolicyService()
