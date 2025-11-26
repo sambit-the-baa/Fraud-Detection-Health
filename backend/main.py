@@ -5,11 +5,24 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 import os
 import logging
-from dotenv import load_dotenv
+from dotenv import import load_dotenv
+from typing import List, Optional
 
-# Import your other modules as needed (schemas, services, models)
+# Import your other modules
 from database import SessionLocal, engine, Base
-# ... (other imports)
+import models
+import schemas
+from services.policy_service import PolicyService
+from services.ai_service import AIService
+from services.document_service import DocumentService
+
+# Create all database tables
+Base.metadata.create_all(bind=engine)
+
+# Initialize services
+policy_service = PolicyService()
+ai_service = AIService()
+document_service = DocumentService()
 
 def get_db():
     db = SessionLocal()
@@ -25,26 +38,264 @@ load_dotenv()
 # Initialize app
 app = FastAPI(title="Health Insurance Claim Portal", version="1.0.0")
 
-# CORS middleware: Add allowed origins (your frontend domain!)
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://fraud-detection-health-frontend.onrender.com",
-        "http://localhost:3000",                # local dev
-        "http://localhost:5173"                 # local dev (Vite)
+        "http://localhost:3000",
+        "http://localhost:5173"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Your API route(s) come AFTER you create app!
-@app.post("/api/verify-policy")
-async def verify_policy(policy_data: dict, db: Session = Depends(get_db)):
-    # Validate and respond (your real logic here)
-    return {"result": "verified"}
+# ==================== POLICY ROUTES ====================
 
-# Add other `/api/...` endpoints as needed.
+@app.post("/api/verify-policy", response_model=schemas.PolicyVerificationResponse)
+async def verify_policy(request: schemas.PolicyVerificationRequest, db: Session = Depends(get_db)):
+    """Verify if a policy exists and is valid"""
+    policy = policy_service.verify_policy(db, request.policy_number)
+    
+    if not policy:
+        return schemas.PolicyVerificationResponse(
+            valid=False,
+            policy_number=request.policy_number,
+            policy_holder_name="",
+            policy_type="",
+            expiry_date=None
+        )
+    
+    return schemas.PolicyVerificationResponse(
+        valid=True,
+        policy_number=policy.policy_number,
+        policy_holder_name=policy.policy_holder_name,
+        policy_type=policy.policy_type,
+        expiry_date=policy.expiry_date.isoformat() if policy.expiry_date else None
+    )
+
+# ==================== CLAIMS ROUTES ====================
+
+@app.post("/api/claims", response_model=schemas.ClaimResponse)
+async def create_claim(claim: schemas.ClaimCreate, db: Session = Depends(get_db)):
+    """Create a new insurance claim"""
+    # Verify policy exists
+    policy = policy_service.verify_policy(db, claim.policy_number)
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    
+    # Create new claim
+    db_claim = models.Claim(
+        policy_number=claim.policy_number,
+        claim_type=claim.claim_type,
+        incident_date=claim.incident_date,
+        description=claim.description,
+        status="pending"
+    )
+    db.add(db_claim)
+    db.commit()
+    db.refresh(db_claim)
+    
+    return schemas.ClaimResponse(
+        id=str(db_claim.id),
+        policy_number=db_claim.policy_number,
+        claim_type=db_claim.claim_type,
+        incident_date=db_claim.incident_date.isoformat(),
+        description=db_claim.description,
+        status=db_claim.status,
+        fraud_score=db_claim.fraud_score,
+        fraud_risk_level=db_claim.fraud_risk_level,
+        created_at=db_claim.created_at.isoformat(),
+        updated_at=db_claim.updated_at.isoformat(),
+        documents=[],
+        questions_count=0
+    )
+
+@app.get("/api/claims/{claim_id}", response_model=schemas.ClaimResponse)
+async def get_claim(claim_id: int, db: Session = Depends(get_db)):
+    """Get claim details by ID"""
+    claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    documents = [{"id": d.id, "filename": d.filename, "document_type": d.document_type} for d in claim.documents]
+    
+    return schemas.ClaimResponse(
+        id=str(claim.id),
+        policy_number=claim.policy_number,
+        claim_type=claim.claim_type,
+        incident_date=claim.incident_date.isoformat(),
+        description=claim.description,
+        status=claim.status,
+        fraud_score=claim.fraud_score,
+        fraud_risk_level=claim.fraud_risk_level,
+        created_at=claim.created_at.isoformat(),
+        updated_at=claim.updated_at.isoformat(),
+        documents=documents,
+        questions_count=len(claim.questions)
+    )
+
+@app.get("/api/claims", response_model=schemas.ClaimsListResponse)
+async def get_all_claims(
+    policy_number: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get all claims with optional filters"""
+    query = db.query(models.Claim)
+    
+    if policy_number:
+        query = query.filter(models.Claim.policy_number == policy_number)
+    if status:
+        query = query.filter(models.Claim.status == status)
+    
+    claims = query.all()
+    
+    claims_response = []
+    for claim in claims:
+        documents = [{"id": d.id, "filename": d.filename, "document_type": d.document_type} for d in claim.documents]
+        claims_response.append(schemas.ClaimResponse(
+            id=str(claim.id),
+            policy_number=claim.policy_number,
+            claim_type=claim.claim_type,
+            incident_date=claim.incident_date.isoformat(),
+            description=claim.description,
+            status=claim.status,
+            fraud_score=claim.fraud_score,
+            fraud_risk_level=claim.fraud_risk_level,
+            created_at=claim.created_at.isoformat(),
+            updated_at=claim.updated_at.isoformat(),
+            documents=documents,
+            questions_count=len(claim.questions)
+        ))
+    
+    return schemas.ClaimsListResponse(claims=claims_response, total=len(claims_response))
+
+@app.get("/api/policies/{policy_number}/claims", response_model=schemas.ClaimsListResponse)
+async def get_policy_claims(policy_number: str, db: Session = Depends(get_db)):
+    """Get all claims for a specific policy"""
+    claims = db.query(models.Claim).filter(models.Claim.policy_number == policy_number).all()
+    
+    claims_response = []
+    for claim in claims:
+        documents = [{"id": d.id, "filename": d.filename, "document_type": d.document_type} for d in claim.documents]
+        claims_response.append(schemas.ClaimResponse(
+            id=str(claim.id),
+            policy_number=claim.policy_number,
+            claim_type=claim.claim_type,
+            incident_date=claim.incident_date.isoformat(),
+            description=claim.description,
+            status=claim.status,
+            fraud_score=claim.fraud_score,
+            fraud_risk_level=claim.fraud_risk_level,
+            created_at=claim.created_at.isoformat(),
+            updated_at=claim.updated_at.isoformat(),
+            documents=documents,
+            questions_count=len(claim.questions)
+        ))
+    
+    return schemas.ClaimsListResponse(claims=claims_response, total=len(claims_response))
+
+# ==================== DOCUMENT ROUTES ====================
+
+@app.post("/api/claims/{claim_id}/documents", response_model=schemas.DocumentUploadResponse)
+async def upload_document(
+    claim_id: int,
+    file: UploadFile = File(...),
+    document_type: str = "other",
+    db: Session = Depends(get_db)
+):
+    """Upload a document for a claim"""
+    claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    # Save file
+    result = await document_service.save_document(file, claim_id, document_type, db)
+    
+    return schemas.DocumentUploadResponse(
+        id=result["id"],
+        filename=result["filename"],
+        document_type=result["document_type"],
+        uploaded_at=result["uploaded_at"]
+    )
+
+# ==================== AI QUESTIONING ROUTES ====================
+
+@app.post("/api/claims/{claim_id}/ask-question", response_model=schemas.QuestionResponse)
+async def ask_question(
+    claim_id: int,
+    request: schemas.QuestionRequest,
+    db: Session = Depends(get_db)
+):
+    """AI asks questions about the claim"""
+    claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    # Get AI response
+    response = await ai_service.ask_question(db, claim, request.user_message)
+    
+    return schemas.QuestionResponse(
+        ai_message=response["ai_message"],
+        follow_up_questions=response.get("follow_up_questions"),
+        fraud_indicators=response.get("fraud_indicators")
+    )
+
+# ==================== FRAUD ANALYSIS ROUTES ====================
+
+@app.post("/api/claims/{claim_id}/analyze-fraud", response_model=schemas.FraudAnalysisResponse)
+async def analyze_fraud(claim_id: int, db: Session = Depends(get_db)):
+    """Perform fraud analysis on a claim"""
+    claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    # Perform analysis
+    result = await ai_service.analyze_fraud_risk(db, claim)
+    
+    # Update claim with fraud score
+    claim.fraud_score = result["fraud_score"]
+    claim.fraud_risk_level = result["risk_level"]
+    db.commit()
+    
+    return schemas.FraudAnalysisResponse(
+        fraud_score=result["fraud_score"],
+        legit_percentage=result.get("legit_percentage"),
+        risk_level=result["risk_level"],
+        indicators=result["indicators"],
+        recommendations=result["recommendations"],
+        confidence=result["confidence"]
+    )
+
+# ==================== STATUS UPDATE ROUTES ====================
+
+@app.patch("/api/claims/{claim_id}/status")
+async def update_claim_status(
+    claim_id: int,
+    status_update: schemas.ClaimStatusUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update claim status (admin)"""
+    claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    claim.status = status_update.status
+    db.commit()
+    
+    return {"message": "Status updated successfully", "status": claim.status}
+
+# ==================== HEALTH CHECK ====================
+
+@app.get("/")
+async def root():
+    return {"message": "Health Insurance Claim Portal API", "status": "running"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
     import uvicorn
