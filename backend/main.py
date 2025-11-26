@@ -267,7 +267,7 @@ async def upload_document(
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
     
-    result = await document_service.upload_doc(db, claim_id, file, document_type)
+    result = await document_service.upload_document(db, claim_id, file, document_type)
     
     return schemas.DocumentUploadResponse(
         id=result["id"],
