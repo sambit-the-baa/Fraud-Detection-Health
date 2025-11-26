@@ -267,7 +267,6 @@ async def upload_document(
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
     
-    # FIXED: Correct method name and parameter order
     result = await document_service.upload_doc(db, claim_id, file, document_type)
     
     return schemas.DocumentUploadResponse(
@@ -317,7 +316,6 @@ async def analyze_fraud(claim_id: str, db = Depends(get_db)):
     
     result = await ai_service.analyze_fraud_risk(db, claim)
     
-    # Update claim with fraud score in MongoDB
     db.claims.update_one(
         {"_id": ObjectId(claim_id)},
         {"$set": {
@@ -373,4 +371,6 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-if __name
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="
