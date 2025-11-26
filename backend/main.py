@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from bson import ObjectId
 # MongoDB migration - removed SQLAlchemy import
 import os
 import logging
@@ -246,18 +247,18 @@ async def get_policy_claims(policy_number: str, db = Depends(get_db)):
 
 @app.post("/api/claims/{claim_id}/documents", response_model=schemas.DocumentUploadResponse)
 async def upload_document(
-    claim_id: int,
+    claim_id: str,
     file: UploadFile = File(...),
     document_type: str = "other",
     db = Depends(get_db)
 ):
     """Upload a document for a claim"""
-    claim = db.query(models.Claim).filter(models.Claim.id == claim_id).first()
+    claim = db.claims.find_one({"_id": ObjectId(claim_id)})
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
     
     # Save file
-    result = await document_service.save_document(file, claim_id, document_type, db)
+    result = await document_service.upload_document(file, claim_id, document_type, db)
     
     return schemas.DocumentUploadResponse(
         id=result["id"],
