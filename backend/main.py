@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from bson import ObjectId
-# MongoDB migration - removed SQLAlchemy import
 import os
 import logging
 from dotenv import load_dotenv
@@ -16,6 +15,10 @@ import schemas
 from services.policy_service import PolicyService
 from services.ai_service import AIService
 from services.document_service import DocumentService
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+load_dotenv()
 
 # Seed sample policies in MongoDB
 def seed_sample_policies():
@@ -52,4 +55,322 @@ def seed_sample_policies():
             ]
             db.policies.insert_many(sample_policies)
             db.policies.create_index("policy_number", unique=True)
-            print("Sample policies seeded successfully")
+            logger.info("Sample policies seeded successfully")
+    except Exception as e:
+        logger.error(f"Error seeding policies: {e}")
+
+# Initialize services
+policy_service = PolicyService()
+ai_service = AIService()
+document_service = DocumentService()
+
+def get_db():
+    return get_sync_db()
+
+# Initialize app
+app = FastAPI(title="Health Insurance Claim Portal", version="1.0.0")
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://fraud-detection-health-frontend.onrender.com",
+        "http://localhost:3000",
+        "http://localhost:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+async def startup_event():
+    seed_sample_policies()
+
+# ==================== POLICY ROUTES ====================
+
+@app.post("/api/verify-policy", response_model=schemas.PolicyVerificationResponse)
+async def verify_policy(request: schemas.PolicyVerificationRequest, db = Depends(get_db)):
+    """Verify if a policy exists and is valid"""
+    policy = policy_service.verify_policy(db, request.policy_number)
+    
+    if not policy:
+        return schemas.PolicyVerificationResponse(
+            valid=False,
+            policy_number=request.policy_number,
+            policy_holder_name="",
+            policy_type="",
+            expiry_date=None
+        )
+    
+    return schemas.PolicyVerificationResponse(
+        valid=True,
+        policy_number=policy["policy_number"],
+        policy_holder_name=policy["policy_holder_name"],
+        policy_type=policy["policy_type"],
+        expiry_date=policy["expiry_date"].isoformat() if policy.get("expiry_date") else None
+    )
+
+# ==================== CLAIMS ROUTES ====================
+
+@app.post("/api/claims", response_model=schemas.ClaimResponse)
+async def create_claim(claim: schemas.ClaimCreate, db = Depends(get_db)):
+    """Create a new insurance claim"""
+    policy = policy_service.verify_policy(db, claim.policy_number)
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    
+    claim_doc = {
+        "policy_number": claim.policy_number,
+        "claim_type": claim.claim_type,
+        "incident_date": claim.incident_date,
+        "description": claim.description,
+        "status": "pending",
+        "fraud_score": None,
+        "fraud_risk_level": None,
+        "created_at": datetime.now(),
+        "updated_at": datetime.now(),
+        "documents": [],
+        "questions": []
+    }
+    
+    result = db.claims.insert_one(claim_doc)
+    claim_doc["_id"] = result.inserted_id
+    
+    return schemas.ClaimResponse(
+        id=str(claim_doc["_id"]),
+        policy_number=claim_doc["policy_number"],
+        claim_type=claim_doc["claim_type"],
+        incident_date=claim_doc["incident_date"].isoformat() if hasattr(claim_doc["incident_date"], 'isoformat') else claim_doc["incident_date"],
+        description=claim_doc["description"],
+        status=claim_doc["status"],
+        fraud_score=claim_doc["fraud_score"],
+        fraud_risk_level=claim_doc["fraud_risk_level"],
+        created_at=claim_doc["created_at"].isoformat(),
+        updated_at=claim_doc["updated_at"].isoformat(),
+        documents=[],
+        questions_count=0
+    )
+
+@app.get("/api/claims/{claim_id}", response_model=schemas.ClaimResponse)
+async def get_claim(claim_id: str, db = Depends(get_db)):
+    """Get claim details by ID"""
+    try:
+        claim = db.claims.find_one({"_id": ObjectId(claim_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid claim ID format")
+    
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    documents = [
+        {"id": str(d.get("_id", "")), "filename": d.get("filename", ""), "document_type": d.get("document_type", "")} 
+        for d in claim.get("documents", [])
+    ]
+    
+    return schemas.ClaimResponse(
+        id=str(claim["_id"]),
+        policy_number=claim["policy_number"],
+        claim_type=claim["claim_type"],
+        incident_date=claim["incident_date"].isoformat() if hasattr(claim["incident_date"], 'isoformat') else claim["incident_date"],
+        description=claim["description"],
+        status=claim["status"],
+        fraud_score=claim.get("fraud_score"),
+        fraud_risk_level=claim.get("fraud_risk_level"),
+        created_at=claim["created_at"].isoformat() if claim.get("created_at") else None,
+        updated_at=claim["updated_at"].isoformat() if claim.get("updated_at") else None,
+        documents=documents,
+        questions_count=len(claim.get("questions", []))
+    )
+
+@app.get("/api/claims", response_model=schemas.ClaimsListResponse)
+async def get_all_claims(
+    policy_number: Optional[str] = None,
+    status: Optional[str] = None,
+    db = Depends(get_db)
+):
+    """Get all claims with optional filters"""
+    query = {}
+    if policy_number:
+        query["policy_number"] = policy_number
+    if status:
+        query["status"] = status
+    
+    claims = list(db.claims.find(query))
+    
+    claims_response = []
+    for claim in claims:
+        documents = [
+            {"id": str(d.get("_id", "")), "filename": d.get("filename", ""), "document_type": d.get("document_type", "")} 
+            for d in claim.get("documents", [])
+        ]
+        claims_response.append(schemas.ClaimResponse(
+            id=str(claim["_id"]),
+            policy_number=claim["policy_number"],
+            claim_type=claim["claim_type"],
+            incident_date=claim["incident_date"].isoformat() if hasattr(claim["incident_date"], 'isoformat') else claim["incident_date"],
+            description=claim["description"],
+            status=claim["status"],
+            fraud_score=claim.get("fraud_score"),
+            fraud_risk_level=claim.get("fraud_risk_level"),
+            created_at=claim["created_at"].isoformat() if claim.get("created_at") else None,
+            updated_at=claim["updated_at"].isoformat() if claim.get("updated_at") else None,
+            documents=documents,
+            questions_count=len(claim.get("questions", []))
+        ))
+    
+    return schemas.ClaimsListResponse(claims=claims_response, total=len(claims_response))
+
+@app.get("/api/policies/{policy_number}/claims", response_model=schemas.ClaimsListResponse)
+async def get_policy_claims(policy_number: str, db = Depends(get_db)):
+    """Get all claims for a specific policy"""
+    claims = list(db.claims.find({"policy_number": policy_number}))
+    
+    claims_response = []
+    for claim in claims:
+        documents = [
+            {"id": str(d.get("_id", "")), "filename": d.get("filename", ""), "document_type": d.get("document_type", "")} 
+            for d in claim.get("documents", [])
+        ]
+        claims_response.append(schemas.ClaimResponse(
+            id=str(claim["_id"]),
+            policy_number=claim["policy_number"],
+            claim_type=claim["claim_type"],
+            incident_date=claim["incident_date"].isoformat() if hasattr(claim["incident_date"], 'isoformat') else claim["incident_date"],
+            description=claim["description"],
+            status=claim["status"],
+            fraud_score=claim.get("fraud_score"),
+            fraud_risk_level=claim.get("fraud_risk_level"),
+            created_at=claim["created_at"].isoformat() if claim.get("created_at") else None,
+            updated_at=claim["updated_at"].isoformat() if claim.get("updated_at") else None,
+            documents=documents,
+            questions_count=len(claim.get("questions", []))
+        ))
+    
+    return schemas.ClaimsListResponse(claims=claims_response, total=len(claims_response))
+
+# ==================== DOCUMENT ROUTES ====================
+
+@app.post("/api/claims/{claim_id}/documents", response_model=schemas.DocumentUploadResponse)
+async def upload_document(
+    claim_id: str,
+    file: UploadFile = File(...),
+    document_type: str = "other",
+    db = Depends(get_db)
+):
+    """Upload a document for a claim"""
+    try:
+        claim = db.claims.find_one({"_id": ObjectId(claim_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid claim ID format")
+    
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    # FIXED: Correct method name and parameter order
+    result = await document_service.upload_doc(db, claim_id, file, document_type)
+    
+    return schemas.DocumentUploadResponse(
+        id=result["id"],
+        filename=result["filename"],
+        document_type=result["document_type"],
+        uploaded_at=result["uploaded_at"]
+    )
+
+# ==================== AI QUESTIONING ROUTES ====================
+
+@app.post("/api/claims/{claim_id}/ask-question", response_model=schemas.QuestionResponse)
+async def ask_question(
+    claim_id: str,
+    request: schemas.QuestionRequest,
+    db = Depends(get_db)
+):
+    """AI asks questions about the claim"""
+    try:
+        claim = db.claims.find_one({"_id": ObjectId(claim_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid claim ID format")
+    
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    response = await ai_service.ask_question(db, claim, request.user_message)
+    
+    return schemas.QuestionResponse(
+        ai_message=response["ai_message"],
+        follow_up_questions=response.get("follow_up_questions"),
+        fraud_indicators=response.get("fraud_indicators")
+    )
+
+# ==================== FRAUD ANALYSIS ROUTES ====================
+
+@app.post("/api/claims/{claim_id}/analyze-fraud", response_model=schemas.FraudAnalysisResponse)
+async def analyze_fraud(claim_id: str, db = Depends(get_db)):
+    """Perform fraud analysis on a claim"""
+    try:
+        claim = db.claims.find_one({"_id": ObjectId(claim_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid claim ID format")
+    
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    result = await ai_service.analyze_fraud_risk(db, claim)
+    
+    # Update claim with fraud score in MongoDB
+    db.claims.update_one(
+        {"_id": ObjectId(claim_id)},
+        {"$set": {
+            "fraud_score": result["fraud_score"],
+            "fraud_risk_level": result["risk_level"],
+            "updated_at": datetime.now()
+        }}
+    )
+    
+    return schemas.FraudAnalysisResponse(
+        fraud_score=result["fraud_score"],
+        legit_percentage=result.get("legit_percentage"),
+        risk_level=result["risk_level"],
+        indicators=result["indicators"],
+        recommendations=result["recommendations"],
+        confidence=result["confidence"]
+    )
+
+# ==================== STATUS UPDATE ROUTES ====================
+
+@app.patch("/api/claims/{claim_id}/status")
+async def update_claim_status(
+    claim_id: str,
+    status_update: schemas.ClaimStatusUpdate,
+    db = Depends(get_db)
+):
+    """Update claim status (admin)"""
+    try:
+        claim = db.claims.find_one({"_id": ObjectId(claim_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid claim ID format")
+    
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    db.claims.update_one(
+        {"_id": ObjectId(claim_id)},
+        {"$set": {
+            "status": status_update.status,
+            "updated_at": datetime.now()
+        }}
+    )
+    
+    return {"message": "Status updated successfully", "status": status_update.status}
+
+# ==================== HEALTH CHECK ====================
+
+@app.get("/")
+async def root():
+    return {"message": "Health Insurance Claim Portal API", "status": "running"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+if __name
