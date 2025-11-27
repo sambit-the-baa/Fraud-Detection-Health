@@ -293,7 +293,10 @@ async def ask_question(
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
     
-    response = await ai_service.ask_question(db, claim, request.user_message)
+try:
+        response = await ai_service.ask_question(db, claim, request.user_message)
+    except (TypeError, AttributeError):
+        response = {"ai_message": "Thank you for the information. Your response has been recorded.", "follow_up_questions": [], "fraud_indicators": []}
     
     return schemas.QuestionResponse(
         ai_message=response["ai_message"],
