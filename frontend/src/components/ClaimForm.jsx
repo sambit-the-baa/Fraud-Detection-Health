@@ -26,7 +26,7 @@ function ClaimForm() {
       newErrors.incident_date = 'Incident date is required'
     } else {
       // Validate date format
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/
       if (!dateRegex.test(formData.incident_date)) {
         newErrors.incident_date = 'Please select a valid date'
       } else {
