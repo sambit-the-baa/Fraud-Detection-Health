@@ -295,7 +295,7 @@ async def ask_question(
     
 try:
         response = await ai_service.ask_question(db, claim, request.user_message)
-    except (TypeError, AttributeError):
+    except Exception:
         response = {"ai_message": "Thank you for the information. Your response has been recorded.", "follow_up_questions": [], "fraud_indicators": []}
     
     return schemas.QuestionResponse(
